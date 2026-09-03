@@ -506,6 +506,7 @@ fn fontOptions(config: Config) Font.Options {
         .weight = config.font_weight,
         .synthetic_italic = config.synthetic_italic,
         .synthetic_italic_weight = config.synthetic_italic_weight,
+        .block_shade_style = config.block_shade_style,
     };
 }
 

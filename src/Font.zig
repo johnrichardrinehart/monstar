@@ -123,6 +123,7 @@ pub const Options = struct {
     weight: Config.FontWeight = .default,
     synthetic_italic: bool = false,
     synthetic_italic_weight: Config.SyntheticItalicWeight = .regular,
+    block_shade_style: Config.BlockShadeStyle = .default,
 };
 
 /// Immutable Fontconfig results. Rasterizers need independent FreeType,
@@ -1221,7 +1222,14 @@ pub fn spriteGlyph(
     if (gop.found_existing) return gop.value_ptr;
     errdefer _ = self.sprite_glyphs.remove(key);
 
-    const g = try sprite.render(alloc, cp, self.sprite_metrics, self.baseline, cell_span);
+    const g = try sprite.render(
+        alloc,
+        cp,
+        self.sprite_metrics,
+        self.baseline,
+        cell_span,
+        self.discovery_data.options.block_shade_style == .kitty,
+    );
     gop.value_ptr.* = .{
         .bitmap = g.bitmap,
         .fully_opaque = alphaBitmapOpaque(g.bitmap),

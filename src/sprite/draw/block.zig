@@ -155,6 +155,81 @@ pub fn fullBlockShade(
         @as(sprite.Color, @enumFromInt(@intFromEnum(shade))),
     );
 }
+/// Draw U+2591..U+2593 with KiTTY's spatial shade masks.
+pub fn kittyShade(
+    cp: u32,
+    canvas: *sprite.Canvas,
+    width: u32,
+    height: u32,
+    metrics: font.Metrics,
+) !void {
+    _ = metrics;
+    std.debug.assert(cp >= 0x2591 and cp <= 0x2593);
+
+    const light = cp != 0x2592;
+    const invert = cp == 0x2593;
+    const xnum: u32 = 12;
+    const square_width = @max(1, width / xnum);
+    const square_height = square_width;
+    var columns = width / square_width;
+    var rows = height / square_height;
+    if (columns > 1 and columns % 2 != xnum % 2) columns -= 1;
+    if (rows > 1 and rows % 2 != 0) rows -= 1;
+
+    const excess_columns = width - square_width * columns;
+    const excess_rows = height - square_height * rows;
+    var previous_extra_y: u32 = 0;
+    for (0..rows) |row_usize| {
+        const row: u32 = @intCast(row_usize);
+        const extra_y = ceilRatio(row * excess_rows, rows);
+        const has_extra_row = extra_y != previous_extra_y;
+        var previous_extra_x: u32 = 0;
+
+        for (0..columns) |column_usize| {
+            const column: u32 = @intCast(column_usize);
+            const extra_x = ceilRatio(column * excess_columns, columns);
+            const has_extra_column = extra_x != previous_extra_x;
+
+            if (has_extra_row) {
+                const alpha: u8 = if (light)
+                    if (invert)
+                        if (column % 2 == 1) 255 else 70
+                    else if (column % 2 == 1) 0 else 70
+                else if ((column % 2 == 1) == invert) 120 else 30;
+                for (0..square_width) |dx|
+                    canvas.pixel(@intCast(column * square_width + @as(u32, @intCast(dx)) + extra_x), @intCast(row * square_height + previous_extra_y), @enumFromInt(alpha));
+            }
+
+            if (has_extra_column) {
+                const alpha: u8 = if (light)
+                    if (invert)
+                        if (row % 2 == 1) 255 else 70
+                    else if (row % 2 == 1) 0 else 70
+                else if ((row % 2 == 1) == invert) 120 else 30;
+                for (0..square_height) |dy|
+                    canvas.pixel(@intCast(column * square_width + previous_extra_x), @intCast(row * square_height + @as(u32, @intCast(dy)) + extra_y), @enumFromInt(alpha));
+            }
+
+            if (has_extra_row and has_extra_column)
+                canvas.pixel(@intCast(column * square_width + previous_extra_x), @intCast(row * square_height + previous_extra_y), @enumFromInt(50));
+
+            const blank = invert != ((row % 2 != column % 2) or (light and row % 2 == 1));
+            if (!blank) canvas.box(
+                @intCast(column * square_width + extra_x),
+                @intCast(row * square_height + extra_y),
+                @intCast((column + 1) * square_width + extra_x),
+                @intCast((row + 1) * square_height + extra_y),
+                .on,
+            );
+            previous_extra_x = extra_x;
+        }
+        previous_extra_y = extra_y;
+    }
+}
+
+fn ceilRatio(numerator: u32, denominator: u32) u32 {
+    return (numerator + denominator - 1) / denominator;
+}
 
 fn quadrant(
     metrics: font.Metrics,

@@ -13,6 +13,7 @@ const z2d = @import("z2d");
 const canvas_mod = @import("sprite/canvas.zig");
 const metrics_mod = @import("sprite/metrics.zig");
 const special = @import("sprite/draw/special.zig");
+const block = @import("sprite/draw/block.zig");
 
 const log = std.log.scoped(.sprite);
 
@@ -145,8 +146,11 @@ pub fn render(
     metrics: Metrics,
     baseline: u31,
     cell_span: u2,
+    kitty_block_shades: bool,
 ) !Glyph {
     std.debug.assert(cell_span >= 1);
+    if (kitty_block_shades and cp >= 0x2591 and cp <= 0x2593)
+        return renderWith(alloc, block.kittyShade, cp, metrics, baseline, cell_span, metrics.cell_height);
     const draw = getDrawFn(cp) orelse unreachable; // covers() gates this
     return renderWith(alloc, draw, cp, metrics, baseline, cell_span, metrics.cell_height);
 }
@@ -247,7 +251,7 @@ test "render box drawing sprites" {
 
     // Horizontal line: full cell width, thin, vertically centered.
     {
-        const g = try render(alloc, 0x2500, test_metrics, 15, 1);
+        const g = try render(alloc, 0x2500, test_metrics, 15, 1, false);
         defer alloc.free(g.bitmap);
         try std.testing.expectEqual(@as(u31, 10), g.width);
         try std.testing.expect(g.height < 5);
@@ -258,7 +262,7 @@ test "render box drawing sprites" {
 
     // Wide variants use the occupied cell span while preserving vertical metrics.
     {
-        const g = try render(alloc, 0x2500, test_metrics, 15, 2);
+        const g = try render(alloc, 0x2500, test_metrics, 15, 2, false);
         defer alloc.free(g.bitmap);
         try std.testing.expectEqual(@as(u31, 20), g.width);
         try std.testing.expect(g.height < 5);
@@ -269,7 +273,7 @@ test "render box drawing sprites" {
 
     // Full block: covers the whole cell exactly.
     {
-        const g = try render(alloc, 0x2588, test_metrics, 15, 1);
+        const g = try render(alloc, 0x2588, test_metrics, 15, 1, false);
         defer alloc.free(g.bitmap);
         try std.testing.expectEqual(@as(u31, 10), g.width);
         try std.testing.expectEqual(@as(u31, 20), g.height);
@@ -280,7 +284,7 @@ test "render box drawing sprites" {
 
     // Rounded corner: uses the z2d path rasterizer.
     {
-        const g = try render(alloc, 0x256D, test_metrics, 15, 1); // ╭
+        const g = try render(alloc, 0x256D, test_metrics, 15, 1, false); // ╭
         defer alloc.free(g.bitmap);
         var sum: usize = 0;
         for (g.bitmap) |px| sum += px;
@@ -296,12 +300,27 @@ test "render box drawing sprites" {
         .cursor_height = 23,
     };
     inline for (&.{ 0x1FB98, 0x1FB99, 0x1CC1F, 0x1CC20 }) |cp| {
-        const g = try render(alloc, cp, odd_metrics, 17, 1);
+        const g = try render(alloc, cp, odd_metrics, 17, 1, false);
         defer alloc.free(g.bitmap);
         var sum: usize = 0;
         for (g.bitmap) |px| sum += px;
         try std.testing.expect(sum > 0);
     }
+}
+
+test "render KiTTY block shade patterns" {
+    const alloc = std.testing.allocator;
+    const expected_opaque = [_]usize{ 50, 100, 150 };
+    for (0x2591..0x2594, expected_opaque) |cp, expected| {
+        const g = try render(alloc, @intCast(cp), test_metrics, 15, 1, true);
+        defer alloc.free(g.bitmap);
+        try std.testing.expectEqual(expected, std.mem.count(u8, g.bitmap, &.{255}));
+        for (g.bitmap) |alpha| try std.testing.expect(alpha == 0 or alpha == 255);
+    }
+
+    const smooth = try render(alloc, 0x2591, test_metrics, 15, 1, false);
+    defer alloc.free(smooth.bitmap);
+    for (smooth.bitmap) |alpha| try std.testing.expectEqual(@as(u8, 0x40), alpha);
 }
 
 test "render decorations" {

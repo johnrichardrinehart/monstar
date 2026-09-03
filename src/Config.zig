@@ -90,6 +90,10 @@ pub const MetricModifier = union(enum) {
     }
 };
 
+pub const BlockShadeStyle = enum {
+    default,
+    kitty,
+};
 pub const FontWeight = enum {
     default,
     medium,
@@ -110,6 +114,7 @@ font_size: FontSize = .{ .points = 12 },
 /// Signed physical-pixel or percentage adjustment to the font's natural cell
 /// height. Unset preserves the natural metrics.
 adjust_cell_height: ?MetricModifier = null,
+block_shade_style: BlockShadeStyle = .default,
 /// Minimum window padding in logical pixels. One configured value applies to
 /// both sides; two values are left/right for X and top/bottom for Y.
 window_padding_x: WindowPadding = .{},
@@ -283,6 +288,8 @@ pub fn set(self: *Config, arena: std.mem.Allocator, key: []const u8, value: []co
         self.font_size = try parseFontSize(value);
     } else if (std.mem.eql(u8, key, "adjust-cell-height")) {
         self.adjust_cell_height = try parseMetricModifier(value);
+    } else if (std.mem.eql(u8, key, "block-shade-style")) {
+        self.block_shade_style = std.meta.stringToEnum(BlockShadeStyle, value) orelse return error.InvalidValue;
     } else if (std.mem.eql(u8, key, "window-padding-x")) {
         self.window_padding_x = try parseWindowPadding(value);
     } else if (std.mem.eql(u8, key, "window-padding-y")) {
@@ -677,6 +684,7 @@ test "defaults" {
     try std.testing.expect(!config.synthetic_italic);
     try std.testing.expectEqual(SyntheticItalicWeight.regular, config.synthetic_italic_weight);
     try std.testing.expectEqual(FontSize{ .points = 12 }, config.font_size);
+    try std.testing.expectEqual(BlockShadeStyle.default, config.block_shade_style);
     try std.testing.expectEqual(WindowPadding{}, config.window_padding_x);
     try std.testing.expectEqual(WindowPadding{}, config.window_padding_y);
     try std.testing.expectEqual(@as(?Command, null), config.command);
@@ -734,6 +742,7 @@ test "parse config" {
         \\synthetic-italic = true
         \\synthetic-italic-weight = bold
         \\font-size = 14.5
+        \\block-shade-style = kitty
         \\window-padding-x = 4
         \\window-padding-y = 6, 10
         \\command = /usr/bin/fish --login
@@ -773,6 +782,7 @@ test "parse config" {
     try std.testing.expectEqual(SyntheticItalicWeight.bold, config.synthetic_italic_weight);
     // invalid re-assignment keeps the previous valid value
     try std.testing.expectEqual(FontSize{ .points = 14.5 }, config.font_size);
+    try std.testing.expectEqual(BlockShadeStyle.kitty, config.block_shade_style);
     try std.testing.expectEqual(WindowPadding{ .first = 4, .second = 4 }, config.window_padding_x);
     try std.testing.expectEqual(WindowPadding{ .first = 6, .second = 10 }, config.window_padding_y);
     try std.testing.expectEqualStrings("/usr/bin/fish --login", config.command.?.shell);
