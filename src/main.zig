@@ -12,6 +12,7 @@ const Link = @import("Link.zig");
 const Pty = @import("Pty.zig");
 const Renderer = @import("Renderer.zig");
 const TerminalLayout = @import("TerminalLayout.zig");
+const Ssh = @import("Ssh.zig");
 const Window = @import("Window.zig");
 
 const log = std.log.scoped(.main);
@@ -28,6 +29,11 @@ pub fn main(init: std.process.Init) !void {
         .run => {},
         .bench => return @import("bench.zig").run(init),
         .help => return printUsage(init),
+        .ssh => return Ssh.run(init, cli.command) catch |err| switch (err) {
+            error.InvalidCli => invalidCli(init),
+            error.TerminfoBootstrapFailed => sshBootstrapFailed(init),
+            else => return err,
+        },
         .version => return printVersion(init),
     }
 
@@ -37,7 +43,7 @@ pub fn main(init: std.process.Init) !void {
     };
 }
 
-const CliAction = enum { run, bench, help, version };
+const CliAction = enum { run, bench, help, ssh, version };
 
 const CommandMode = enum { shell, exec };
 
@@ -79,6 +85,11 @@ const CliParser = struct {
             } else if (std.mem.eql(u8, arg, "--version")) {
                 self.cli.action = .version;
                 return self.cli;
+            } else if (self.index == 0 and std.mem.eql(u8, arg, "ssh")) {
+                if (self.index + 1 >= self.args.len) return error.InvalidCli;
+                self.cli.action = .ssh;
+                self.setCommand(.exec, self.index + 1);
+                break;
             } else if (std.mem.eql(u8, arg, "--")) {
                 if (self.index + 1 >= self.args.len) return error.InvalidCli;
                 self.setCommand(.shell, self.index + 1);
@@ -224,6 +235,7 @@ fn printUsage(init: std.process.Init) !void {
     try writer.interface.writeAll(
         \\usage: monstar [options]
         \\       monstar [options] -e command [args...]
+        \\       monstar ssh [ssh-options] destination
         \\       monstar [options] -- command...
         \\
         \\Options:
@@ -240,6 +252,7 @@ fn printUsage(init: std.process.Init) !void {
         \\  -o key=value                       Override a config key
         \\  -e command [args...]               Execute command directly
         \\  -- command...                      Run command through /bin/sh -c
+        \\  ssh [ssh-options] destination       Install terminfo, then connect with OpenSSH
         \\
     );
 }
@@ -257,6 +270,14 @@ fn invalidCli(init: std.process.Init) noreturn {
     writer.interface.writeAll("monstar: invalid command line\nTry 'monstar --help' for usage.\n") catch {};
     writer.interface.flush() catch {};
     std.process.exit(2);
+}
+
+fn sshBootstrapFailed(init: std.process.Init) noreturn {
+    var buf: [256]u8 = undefined;
+    var writer = std.Io.File.stderr().writer(init.io, &buf);
+    writer.interface.writeAll("monstar ssh: failed to install remote terminfo\n") catch {};
+    writer.interface.flush() catch {};
+    std.process.exit(1);
 }
 
 /// GUI mode: run a live terminal session in a window.
@@ -717,6 +738,18 @@ test "parse CLI reserves bare words for future subcommands" {
 
     const args = [_][:0]const u8{ "echo", "hello" };
     try std.testing.expectError(error.InvalidCli, parseCli(arena_state.allocator(), &args));
+}
+
+test "parse CLI accepts SSH subcommand" {
+    var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena_state.deinit();
+
+    const args = [_][:0]const u8{ "ssh", "-p", "2222", "user@example.com" };
+    const cli = try parseCli(arena_state.allocator(), &args);
+
+    try std.testing.expectEqual(.ssh, cli.action);
+    try std.testing.expectEqualStrings("-p", cli.command[0]);
+    try std.testing.expectEqualStrings("user@example.com", cli.command[2]);
 }
 
 test "parse CLI double dash command uses shell mode" {

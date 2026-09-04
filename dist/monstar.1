@@ -15,6 +15,10 @@ monstar \- a small Wayland terminal emulator
 .RI [ options ]
 .B \-\-
 .I command...
+.br
+.B monstar ssh
+.RI [ ssh-options ]
+.I destination
 .SH DESCRIPTION
 .B monstar
 is a Wayland terminal emulator written in Zig and built on Ghostty's terminal
@@ -136,11 +140,16 @@ Monstar uses Ghostty's
 terminal core and installs its own
 .B monstar
 terminfo entry.
-When a remote host does not recognize it, install the local definition there:
+Use
+.B monstar ssh
+to install the bundled entry before an interactive OpenSSH session:
 .PP
 .EX
-infocmp -x monstar | ssh HOST tic -x -
+monstar ssh [ssh-options] destination
 .EE
+.PP
+The command accepts OpenSSH connection options before the destination.
+It does not accept remote commands or forwarding-only session options.
 .SH CONFIGURATION
 The default configuration file is
 .I $XDG_CONFIG_HOME/monstar/config

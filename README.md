@@ -59,6 +59,15 @@ Pass `--` to run a shell expression:
 monstar -- 'git log --oneline | less'
 ```
 
+Install Monstar's terminfo entry and open an interactive SSH session:
+
+```sh
+monstar ssh user@example.com
+```
+
+The command accepts OpenSSH connection options before the destination. It does
+not accept a remote command or forwarding-only session options.
+
 Set the working directory, initial size, title, app ID, font, and one-off
 configuration overrides with command-line options:
 
